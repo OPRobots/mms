@@ -17,6 +17,10 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QtMath>
+#include <QDir>
+#include <QStandardPaths>
+#include <QProcess>
+#include <QFileInfoList>
 
 #include "AssertMacros.h"
 #include "Color.h"
@@ -113,6 +117,9 @@ Window::Window(QWidget *parent)
       m_movementStepSize(0.0),
       m_speedSlider(new QSlider(Qt::Horizontal)),
 
+      // Video
+      m_recordRunButton(new QPushButton("Record Run")),
+
       // Helpers
       m_tilesWithColor(QSet<QPair<int, int>>()),
       m_tilesWithText(QSet<QPair<int, int>>()) {
@@ -163,15 +170,43 @@ Window::Window(QWidget *parent)
     label->setMinimumWidth(90);
   }
 
-  // Add mouse algo pause and reset buttons
-  m_pauseButton->setEnabled(false);
-  m_resetButton->setEnabled(false);
-  controlsLayout->addWidget(m_pauseButton, 0, 2, 1, 1);
-  controlsLayout->addWidget(m_resetButton, 0, 3, 1, 1);
-  connect(m_pauseButton, &QPushButton::clicked, this,
-          &Window::onPauseButtonPressed);
-  connect(m_resetButton, &QPushButton::pressed, this,
-          &Window::onResetButtonPressed);
+  // Add the mouse algo pause, reset and record buttons
+  QWidget *buttonGroup = new QWidget();
+  QHBoxLayout *buttonLayout = new QHBoxLayout(buttonGroup);
+  buttonLayout->setContentsMargins(0, 0, 0, 0);
+  buttonLayout->setSpacing(4);
+
+  m_recordRunButton = new QPushButton("○");
+  m_recordRunButton->setCheckable(true);
+  m_recordRunButton->setEnabled(true);
+  int size = m_recordRunButton->sizeHint().height();
+  m_recordRunButton->setFixedSize(size, size);
+
+  // Add widgets with stretch factors
+  buttonLayout->addWidget(m_pauseButton, 2);
+  buttonLayout->addWidget(m_resetButton, 2);
+  buttonLayout->addWidget(m_recordRunButton, 0);
+
+  // Add the group to the main layout in columns 2-3
+  controlsLayout->addWidget(buttonGroup, 0, 2, 1, 2);
+
+  // Connect signals
+  connect(m_pauseButton, &QPushButton::clicked, this, &Window::onPauseButtonPressed);
+  connect(m_resetButton, &QPushButton::pressed, this, &Window::onResetButtonPressed);
+
+  connect(m_recordRunButton, &QPushButton::clicked, this, [this]() {
+      if (m_recordRunButton->isChecked()) {
+          m_recordRunButton->setText("●");
+          m_saveFrames = true;
+          m_recordRunButton->setStyleSheet("color: red;");
+          m_recordRunButton->setToolTip("Recording...");
+      } else {
+          m_recordRunButton->setText("○");
+          m_saveFrames = false;
+          m_recordRunButton->setStyleSheet("color: black;");
+          m_recordRunButton->setToolTip("Record Run");
+      }
+  });
 
   // Add mouse algo speed
   QLabel *turtle = new QLabel();
@@ -312,6 +347,10 @@ Window::Window(QWidget *parent)
       return;
     }
     m_map->update();
+    if (m_pendingFrameSave) {
+        saveFrame();
+        m_pendingFrameSave = false;
+    }
     then = now;
   });
   mapTimer->start(secondsPerFrame * 1000);
@@ -526,11 +565,19 @@ void Window::cancelProcess(QProcess *process, QLabel *status) {
   process->waitForFinished();
   status->setText("CANCELED");
   status->setStyleSheet(CANCELED_STYLE_SHEET);
+  m_pendingFrameSave = false;
+  QTimer::singleShot(1000, this, [this]() {
+      generateVideoFromFrames();
+  });
 }
 
 void Window::cancelAllProcesses() {
   cancelBuild();
   cancelRun();
+  m_pendingFrameSave = false;
+  QTimer::singleShot(1000, this, [this]() {
+      generateVideoFromFrames();
+  });
 }
 
 void Window::startBuild() {
@@ -704,6 +751,10 @@ void Window::startRun() {
 
   // Start the run process
   if (ProcessUtilities::start(runCommand, directory, process)) {
+    if(m_saveFrames){
+      m_rollingCamera = true;
+    }
+
     // Save a pointer to the process
     m_runProcess = process;
 
@@ -738,6 +789,14 @@ void Window::onRunExit(int exitCode, QProcess::ExitStatus exitStatus) {
   // Always unpause on exit
   if (m_isPaused) {
     onPauseButtonPressed();
+  }
+
+  // Stop recording UI (if active)
+  if (m_recordRunButton->isChecked()) {
+      m_recordRunButton->setChecked(false);
+      m_recordRunButton->setText("○");
+      m_recordRunButton->setStyleSheet("color: black;");
+      m_recordRunButton->setToolTip("Record Run");
   }
 
   // Only enabled while mouse is running
@@ -1103,6 +1162,7 @@ QString Window::executeCommand(QString command) {
     }
     int numHalfSteps = distance * 2;
     bool success = moveForward(numHalfSteps);
+    //m_pendingFrameSave = true;
     return success ? "" : CRASH;
   } else if (function == "moveForwardHalf") {
     int numHalfSteps = 1;
@@ -1110,18 +1170,23 @@ QString Window::executeCommand(QString command) {
       numHalfSteps = tokens.at(1).toInt();
     }
     bool success = moveForward(numHalfSteps);
+    //m_pendingFrameSave = true;
     return success ? "" : CRASH;
   } else if (function == "turnRight" || function == "turnRight90") {
     turn(Movement::TURN_RIGHT_90);
+    //m_pendingFrameSave = true;
     return "";
   } else if (function == "turnLeft" || function == "turnLeft90") {
     turn(Movement::TURN_LEFT_90);
+    //m_pendingFrameSave = true;
     return "";
   } else if (function == "turnRight45") {
     turn(Movement::TURN_RIGHT_45);
+    //m_pendingFrameSave = true;
     return "";
   } else if (function == "turnLeft45") {
     turn(Movement::TURN_LEFT_45);
+    //m_pendingFrameSave = true;
     return "";
   } else if (function == "wasReset") {
     return boolToString(wasReset());
@@ -1170,6 +1235,7 @@ QString Window::executeCommand(QString command) {
 }
 
 void Window::processQueuedCommands() {
+  m_pendingFrameSave = true;
   while (!m_commandQueue.isEmpty() && !m_isPaused) {
     QString response = "";
     if (isMoving()) {
@@ -1221,10 +1287,24 @@ double Window::progressRequired(Movement movement) {
   }
 }
 
+QString movementToString(Movement m) {
+    switch (m) {
+    case Movement::NONE: return "NONE";
+    case Movement::MOVE_STRAIGHT: return "MOVE_STRAIGHT";
+    case Movement::MOVE_DIAGONAL: return "MOVE_DIAGONAL";
+    case Movement::TURN_RIGHT_45: return "TURN_RIGHT_45";
+    case Movement::TURN_LEFT_45: return "TURN_LEFT_45";
+    case Movement::TURN_RIGHT_90: return "TURN_RIGHT_90";
+    case Movement::TURN_LEFT_90: return "TURN_LEFT_90";
+    default: return "UNKNOWN";
+    }
+}
+
 void Window::updateMouseProgress(double progress) {
   // Determine the destination of the mouse.
   SemiPosition destinationLocation = m_startingPosition;
   Angle destinationRotation = DIRECTION_TO_ANGLE().value(m_startingDirection);
+  //qDebug() << "Siguiente paso:" << movementToString(m_movement);
   if (m_movement == Movement::MOVE_STRAIGHT) {
     if (m_startingDirection == SemiDirection::NORTH) {
       destinationLocation.y += m_halfStepsToMoveForward;
@@ -1302,9 +1382,15 @@ void Window::updateMouseProgress(double progress) {
     // determine if the goal was reached
     if (m_maze->isInCenter(m_startingPosition.toMazeLocation())) {
       stats->finishRun();  // record a completed start-to-finish run
+      QTimer::singleShot(1000, this, [this]() {
+          generateVideoFromFrames();
+      });
     } else if (m_startingPosition.toMazeLocation().first == 0 &&
                m_startingPosition.toMazeLocation().second == 0) {
       stats->endUnfinishedRun();
+      QTimer::singleShot(1000, this, [this]() {
+          generateVideoFromFrames();
+      });
     }
   }
 }
@@ -1538,6 +1624,13 @@ void Window::setText(int x, int y, QString text) {
   m_tilesWithText.insert({x, y});
 }
 
+void Window::setSaveFramesEnabled(bool enabled) {
+    m_saveFrames = enabled;
+    if (enabled) {
+        m_frameCounter = 0;
+    }
+}
+
 void Window::clearText(int x, int y) {
   if (!isWithinMaze(x, y)) {
     return;
@@ -1746,6 +1839,143 @@ Coordinate Window::getCoordinate(SemiPosition semiPos) const {
       Dimensions::halfTileLength() * static_cast<double>(semiPos.x),
       Dimensions::halfTileLength() * static_cast<double>(semiPos.y));
   return coordinate;
+}
+
+void Window::saveFrame() {
+    if (!m_saveFrames || !m_map) return;
+
+    // Get maze sizes and dimensions
+    int mazeW = mazeWidth();
+    int mazeH = mazeHeight();
+
+    double wallWidth = Dimensions::wallWidth().getMeters();
+    double tileLength = Dimensions::tileLength().getMeters();
+
+    double physicalWidth = wallWidth + tileLength * mazeW;
+    double physicalHeight = wallWidth + tileLength * mazeH;
+
+    int mapWidthPixels = m_map->width();
+    int mapHeightPixels = m_map->height();
+
+    // Define position and size of maze area inside the widget
+    int margin = 5;  // margins used in fullMapPosition and fullMapSize
+
+    int fullMapX = margin;
+    int fullMapY = margin;
+    int fullMapW = mapWidthPixels - 2 * margin;
+    int fullMapH = mapHeightPixels - 2 * margin;
+
+    // Calculate scale in pixels per meter
+    double pixelsPerMeter = std::min(fullMapW / physicalWidth, fullMapH / physicalHeight);
+
+    // Maze size in pixels
+    int pixelWidth = static_cast<int>(pixelsPerMeter * physicalWidth);
+    int pixelHeight = static_cast<int>(pixelsPerMeter * physicalHeight);
+
+    // Position of bottom-left corner to center the maze
+    int pixelLowerLeftCornerX = fullMapX + (fullMapW - pixelWidth) / 2;
+    int pixelLowerLeftCornerY = fullMapY + (fullMapH - pixelHeight) / 2;
+
+    // Qt origin is top-left, so Y must be inverted
+    int cropX = pixelLowerLeftCornerX;
+    int cropY = mapHeightPixels - pixelLowerLeftCornerY - pixelHeight;
+
+    // Create crop rectangle exactly around the maze without borders
+    QRect cropRect(cropX, cropY, pixelWidth, pixelHeight);
+
+    // Debug to check coordinates and sizes
+    // qDebug() << "Crop rect:" << cropRect << "Map size:" << mapWidthPixels << mapHeightPixels;
+
+    // Capture and crop
+    QPixmap fullPixmap = m_map->grab();
+    QPixmap croppedPixmap = fullPixmap.copy(cropRect);
+
+    // Save the image
+    QString outputDir = QDir::currentPath() + "/frames";
+    QDir().mkpath(outputDir);
+
+    QString filename = outputDir + QString("/frame_%1.png").arg(m_frameCounter, 4, 10, QChar('0'));
+
+    if (croppedPixmap.save(filename)) {
+        qDebug() << "Saved cropped frame:" << filename;
+        m_frameCounter++;
+    } else {
+        qWarning() << "Failed to save cropped frame:" << filename;
+    }
+}
+
+void Window::generateVideoFromFrames() {
+    if (!m_rollingCamera) return;
+
+    QString outputDir = QDir::currentPath() + "/frames";
+    //QString program = "C:/ProgramData/chocolatey/bin/ffmpeg.exe";
+    QString program = "ffmpeg";
+
+    QString mouseName = m_mouseAlgoComboBox->currentText();
+    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    QString videoFileName = QString("%1_%2.mp4").arg(mouseName, timestamp);
+
+    QStringList arguments;
+    arguments << "-framerate" << "60"
+              << "-i" << "frame_%04d.png"
+              << "-vf" << "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+              << "-pix_fmt" << "yuv420p"
+              << videoFileName;
+
+    QProcess ffmpeg;
+    ffmpeg.setWorkingDirectory(outputDir);
+    ffmpeg.setProcessChannelMode(QProcess::MergedChannels);
+
+    ffmpeg.start(program, arguments);
+    if (!ffmpeg.waitForStarted()) {
+        qWarning() << "Error: could not start ffmpeg -" << ffmpeg.errorString();
+        return;
+    }
+
+    if (!ffmpeg.waitForFinished(-1)) {
+        qWarning() << "ffmpeg did not finish correctly -" << ffmpeg.errorString();
+        // Show output in case of error
+        qWarning() << "ffmpeg output:" << ffmpeg.readAll();
+        return;
+    }
+
+    // Do NOT show output in case of success
+    // qDebug() << "ffmpeg output:" << ffmpeg.readAll();
+    qDebug() << "Video generated successfully.";
+
+    // Delete capture files after video generation
+    QDir dir(outputDir);
+    QFileInfoList fileList = dir.entryInfoList(QStringList() << "frame_*.png", QDir::Files);
+    for (const QFileInfo &fileInfo : fileList) {
+        if (!dir.remove(fileInfo.fileName())) {
+            qWarning() << "Could not delete:" << fileInfo.fileName();
+        }
+    }
+    qDebug() << "Captures deleted.";
+
+    m_frameCounter = 0;
+    m_rollingCamera = false;
+}
+
+void Window::testVideoFromFrames() {
+    //QString program = "C:/ProgramData/chocolatey/bin/ffmpeg.exe";
+    QString program = "ffmpeg";
+
+    QProcess test;
+    test.setProcessChannelMode(QProcess::MergedChannels);
+    test.start(program, QStringList() << "-version");
+
+    if (!test.waitForStarted()) {
+        qWarning() << "Could not start ffmpeg:" << test.errorString();
+        return;
+    }
+
+    if (!test.waitForFinished()) {
+        qWarning() << "ffmpeg did not finish correctly:" << test.errorString();
+        return;
+    }
+
+    qDebug() << "ffmpeg -version output:\n" << test.readAll();
 }
 
 }  // namespace mms

@@ -49,6 +49,18 @@ class Window : public QMainWindow {
   void resizeEvent(QResizeEvent *event);
 
  private:
+  // ----- Save Video -----
+
+  bool m_saveFrames = false;
+  int m_frameCounter = 0;
+  bool m_pendingFrameSave = false;
+  bool m_rollingCamera = false;
+  QPushButton *m_recordRunButton;
+  void saveFrame();
+  void setSaveFramesEnabled(bool enabled);
+  void generateVideoFromFrames();
+  void testVideoFromFrames();
+
   // ----- Graphics -----
 
   Map *m_map;
