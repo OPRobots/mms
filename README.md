@@ -1,23 +1,24 @@
-# mms <a href="https://www.buymeacoffee.com/mackorone"><img align="right" height=36 alt="Save the Children" src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"></a>
+# mms 
 
 ![](img/mms.gif)
 
 ## Table of Contents
 
-1. [Introduction](https://github.com/mackorone/mms#introduction)
-1. [Download](https://github.com/mackorone/mms#download)
-1. [Quick Start](https://github.com/mackorone/mms#quick-start)
-1. [Mouse API](https://github.com/mackorone/mms#mouse-api)
-1. [Scorekeeping](https://github.com/mackorone/mms#scorekeeping)
-1. [Cell Walls](https://github.com/mackorone/mms#cell-walls)
-1. [Cell Color](https://github.com/mackorone/mms#cell-color)
-1. [Cell Text](https://github.com/mackorone/mms#cell-text)
-1. [Reset Button](https://github.com/mackorone/mms#reset-button)
-1. [Maze Files](https://github.com/mackorone/mms#maze-files)
-1. [Building From Source](https://github.com/mackorone/mms#building-from-source)
-1. [Related Projects](https://github.com/mackorone/mms#related-projects)
-1. [Citations](https://github.com/mackorone/mms#citations)
-1. [Acknowledgements](https://github.com/mackorone/mms#acknowledgements)
+1. [Introduction](#introduction)
+1. [Download](#download)
+1. [Quick Start](#quick-start)
+1. [Record Run](#record-run)
+1. [Mouse API](#mouse-api)
+1. [Scorekeeping](#scorekeeping)
+1. [Cell Walls](#cell-walls)
+1. [Cell Color](#cell-color)
+1. [Cell Text](#cell-text)
+1. [Reset Button](#reset-button)
+1. [Maze Files](#maze-files)
+1. [Building From Source](#building-from-source)
+1. [Related Projects](#related-projects)
+1. [Citations](#citations)
+1. [Acknowledgements](#acknowledgements)
 
 ## Introduction
 
@@ -45,12 +46,15 @@ For information about Micromouse, see the [Micromouse Wikipedia page](http://en.
 You can download pre-compiled binaries from the
 [releases](https://github.com/mackorone/mms/releases) page.
 
+Or our version [for windows] with the .mp4 export from ours:
+[releases](https://github.com/OPRobots/mms/releases) page.
+
 - Linux: Download and unzip `linux.zip` and run `mms-x86_64.AppImage`
 - macOS: Download and unzip `macos.zip` and run `mms.app`
 - Windows: Download and unzip `windows.zip` and run `mms/mms.exe`
 
 If pre-compiled binaries for your platform are unavailable, you'll have to
-[build from source](https://github.com/mackorone/mms#building-from-source).
+[build from source](#building-from-source).
 
 > [!IMPORTANT]
 > The macOS version fails with the following error:
@@ -83,11 +87,30 @@ Writing a Micromouse algorithm is easy! Here are some available templates:
 | Rust | [hardliner66/mms-rs](https://github.com/hardliner66/mms-rs)
 | Zig | [kouosi/mms-zig](https://github.com/kouosi/mms-zig)
 
-
 If a template for a particular language is missing, don't fret! Writing your
 own template is as easy as writing to stdout, reading from stdin, and
-implementing the [mouse API](https://github.com/mackorone/mms#mouse-api) below.
+implementing the [mouse API](#mouse-api) below.
 If you have a template you'd like to share, please make a pull request!
+
+## Record Run
+
+This project supports exporting the run recording as a `.mp4` video file. To enable this feature, you need to have **ffmpeg** installed on your system.
+
+The recording captures the robot’s movement through the maze and saves it as a video. Make sure `ffmpeg` is available in your system PATH so the export function can run correctly.
+
+Once installed, running the export will generate the `.mp4` file automatically in the /frames folder.
+
+### Installing ffmpeg
+
+- On **Windows**, download it from [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html) and add the `bin` folder to your PATH.
+- On **macOS**, install via Homebrew:
+  ```bash
+  brew install ffmpeg
+  ```
+- On **Linux**, use your package manager, for example:
+  ```bash
+  sudo apt install ffmpeg
+  ```
 
 ## Mouse API
 
@@ -225,7 +248,7 @@ int/float getStat(string stat);
 * **Args:**
   * `X` - The X coordinate of the cell
   * `Y` - The Y coordinate of the cell
-  * `C` - The character of the desired [color](https://github.com/mackorone/mms#cell-color)
+  * `C` - The character of the desired [color](#cell-color)
 * **Action:** Set the color of the cell at the given position
 * **Response:** None
 
@@ -245,7 +268,7 @@ int/float getStat(string stat);
 * **Args:**
   * `X` - The X coordinate of the cell
   * `Y` - The Y coordinate of the cell
-  * `TEXT` - The desired [text](https://github.com/mackorone/mms#cell-text), max length 10
+  * `TEXT` - The desired [text](#cell-text), max length 10
 * **Action:** Set the text of the cell at the given position
 * **Response:** None
 
@@ -260,7 +283,6 @@ int/float getStat(string stat);
 * **Args:** None
 * **Action:** Clear the text of all cells
 * **Response:** None
-
 
 #### `wasReset`
 * **Args:** None
@@ -287,7 +309,6 @@ int/float getStat(string stat);
     * `score (float)`
 * **Action:** None
 * **Response:** The value of the stat, or `-1` if no value exists yet. The value will either be a float or integer, according to the types listed above.
-
 
 #### Example
 
@@ -351,7 +372,6 @@ non-existent. By default, the simulator will display walls that haven't been
 discovered as dark red. As the robot explores the maze, it should set walls
 as it discovers them.
 
-
 ## Cell Color
 
 The available colors are as follows:
@@ -374,7 +394,6 @@ The available colors are as follows:
 |  R   | Dark Red    |
 |  Y   | Dark Yellow |
 
-
 ## Cell Text
 
 [All printable ASCII characters](http://facweb.cs.depaul.edu/sjost/it212/documents/ascii-pr.htm),
@@ -383,7 +402,6 @@ newline or tab, will be replaced with `?`.
 
 When no algorithm is running, the simulator displays the distance of each cell
 from the center of the maze.
-
 
 ## Reset Button
 
@@ -533,7 +551,7 @@ qmake && make
 ../../bin/mms
 ```
 
-## Related Works
+## Related Projects
 
 Feel free to open a pull request if you want your work listed here!
 
@@ -571,7 +589,6 @@ Feel free to open a pull request if you want your work listed here!
 - <https://github.com/james-ralph8555/DrexelMicromouse2020>
 - <https://github.com/darshit-desai/Maze-Solver-simulation-using-Wall-Following-Algorithm-OOP>
 - <https://github.com/omkarchittar/Wall_Following_Robot>
-
 
 ## Acknowledgements
 
