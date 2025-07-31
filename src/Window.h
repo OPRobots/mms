@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <QChar>
 #include <QCloseEvent>
 #include <QComboBox>
@@ -12,8 +13,11 @@
 #include <QPushButton>
 #include <QQueue>
 #include <QSet>
+#include <QThread>
 #include <QTimer>
 #include <QToolButton>
+#include <QtConcurrent/QtConcurrent>
+
 
 #include "Map.h"
 #include "Maze.h"
@@ -43,22 +47,25 @@ struct Wall {
 class Window : public QMainWindow {
   Q_OBJECT
 
- public:
+public:
   Window(QWidget *parent = 0);
   void closeEvent(QCloseEvent *event);
   void resizeEvent(QResizeEvent *event);
 
- private:
+private:
   // ----- Save Video -----
 
   bool m_saveFrames = false;
-  int m_frameCounter = 0;
+  std::atomic<int> m_frameCounter = 0;
   bool m_pendingFrameSave = false;
   bool m_rollingCamera = false;
+  qint64 m_lastFrameSaveTime = 0;
+  QThread *thread;
   QPushButton *m_recordRunButton;
   void saveFrame();
   void setSaveFramesEnabled(bool enabled);
   void generateVideoFromFrames();
+  void deleteCapturedFrames();
   void testVideoFromFrames();
 
   // ----- Graphics -----
@@ -183,9 +190,9 @@ class Window : public QMainWindow {
   SemiPosition m_startingPosition;
   SemiDirection m_startingDirection;
   Movement m_movement;
-  bool m_doomedToCrash;  // if the requested movement will result in a crash
-  int m_halfStepsToMoveForward;  // the number of allowable half-steps for the
-                                 // movement
+  bool m_doomedToCrash; // if the requested movement will result in a crash
+  int m_halfStepsToMoveForward; // the number of allowable half-steps for the
+                                // movement
   double m_movementProgress;
   double m_movementStepSize;
   QSlider *m_speedSlider;
@@ -245,6 +252,8 @@ class Window : public QMainWindow {
   bool isWithinMaze(int x, int y) const;
   Wall getOpposingWall(Wall wall) const;
   Coordinate getCoordinate(SemiPosition semiPos) const;
+private slots:
+  void saveFrameThread(QPixmap fullPixmap);
 };
 
-}  // namespace mms
+} // namespace mms
