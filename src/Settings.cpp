@@ -127,6 +127,13 @@ void Settings::update(QString group, QString key, QString value,
 }
 
 Settings::Settings() {
+  // Define the path for the .ini file in the same directory as the executable
+  QString iniFilePath = QCoreApplication::applicationDirPath() + "/config.ini";
+
+  // Set QSettings to use the .ini file instead of the registry
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, iniFilePath);
+
   QCoreApplication::setOrganizationName("mackorone");
   QCoreApplication::setOrganizationDomain("www.github.com/mackorone");
   QCoreApplication::setApplicationName("mms");

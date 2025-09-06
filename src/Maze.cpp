@@ -26,12 +26,21 @@ Maze *Maze::fromFile(const QString &path) {
     lines.append(line);
   }
 
+  // Filters lines that start with '[' or are blank
+  QVector<QString> filteredLines;
+  for (const QString& l : lines) {
+    QString trimmed = l.trimmed();
+    if (trimmed.isEmpty() || trimmed.startsWith('['))
+      continue;
+    filteredLines.append(trimmed);
+  }
+
   // Try map format first, then num
-  Maze *maze = fromMapFile(lines);
+  Maze *maze = fromMapFile(filteredLines);
   if (maze != nullptr) {
     return maze;
   }
-  return fromNumFile(lines);
+  return fromNumFile(filteredLines);
 }
 
 int Maze::getWidth() const { return m_tiles.size(); }

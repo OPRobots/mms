@@ -356,18 +356,25 @@ void Window::closeEvent(QCloseEvent *event) {
 }
 
 void Window::onMazeFileButtonPressed() {
-  QString path = QFileDialog::getOpenFileName(this, tr("Load Maze"));
-  if (path.isNull()) {
-    return;
+  QStringList paths = QFileDialog::getOpenFileNames(this, tr("Load Mazes"));
+  if (paths.isEmpty()) {
+      return;
   }
-  Maze *maze = Maze::fromFile(path);
-  if (maze == nullptr) {
-    showInvalidMazeFileWarning(path);
-    return;
+  QString validPath; // To remember the last valid one loaded
+  for (const QString& path : paths) {
+      Maze *maze = Maze::fromFile(path);
+      if (maze == nullptr) {
+          showInvalidMazeFileWarning(path);
+          continue;
+      }
+      SettingsMazeFiles::addPath(path);
+      validPath = path;
   }
-  SettingsMazeFiles::addPath(path);
-  refreshMazeFileComboBox(path);
-  updateMazeAndPath(maze, path);
+  // Now refresh the combo and load the last valid one selected
+  if (!validPath.isEmpty()) {
+      refreshMazeFileComboBox(validPath);
+      updateMazeAndPath(Maze::fromFile(validPath), validPath);
+  }
 }
 
 void Window::onMazeFileComboBoxChanged(QString path) {
